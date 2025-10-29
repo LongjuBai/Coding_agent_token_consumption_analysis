@@ -14,7 +14,7 @@ AI agents offer substantial opportunities to boost human productivity across man
 
 3. **Input Token Dominance**: Unlike chat and reasoning tasks, input tokens dominate overall consumption and cost, even with token caching.
 
-4. **Prediction Feasibility**: While predicting total token consumption before execution is very challenging (Pearson's r < 0.15), predicting output-token amounts and the log scale of total consumption appears practical and reasonably accurate.
+4. **Prediction Exploration**: While predicting total token consumption before execution is very challenging (Pearson's r < 0.15), predicting output-token amounts and the log scale of total consumption appears practical and reasonably accurate.
 
 ## Repository Structure
 
@@ -38,7 +38,7 @@ AI agents offer substantial opportunities to boost human productivity across man
     ├── llm_predictor_logScale/                  # Logarithmic scale prediction
     │   └── llm_token_cost_pipeline_*.py
     ├── create_correlation_plots.py              # Generate correlation visualizations
-    └── create_fg_comparison_plots.py            # Feature group comparison plots
+    └── create_fg_comparison_plots.py            # Results for agentic prediction
 ```
 
 ## Key Insights
@@ -51,6 +51,8 @@ AI agents offer substantial opportunities to boost human productivity across man
 
 ### Prediction Challenges
 
-- Total token prediction is extremely difficult (r < 0.15)
-- Output token prediction shows promise (more accurate)
+- Total token prediction is extremely difficult (r < 0.15). Output token prediction shows promise (more accurate)
 - Predictions on log scale are more feasible than exact number predictions
+- Using the agent itself to make predictions also shows potential, as it can actively explore the repository with the same tools it uses to solve the given problems.
+- Predicting token consumption with a single LLM or by the agent itself is hindered by sampling bias, overestimated costs, and challenges with constructing effective few-shot examples due to high variance, context limits, and user tolerance for added complexity.
+
