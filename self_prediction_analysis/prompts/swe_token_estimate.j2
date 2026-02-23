@@ -1,0 +1,202 @@
+Here's a running example of how to estimate token costs for a software engineering task:
+
+--------------------- START OF EXAMPLE ---------------------
+
+USER: I've uploaded a python code repository in the directory example_repo. You are a TOKEN ESTIMATION agent. Estimate the token cost to fix the following issue description:
+
+<issue_description>
+Fix a bug where the version comparison function fails for development versions (e.g., "1.2.3.dev0") when used across multiple modules in a large codebase with complex dependencies.
+</issue_description>
+
+ASSISTANT: I'll explore the codebase to understand the problem and estimate token costs.
+
+<function=execute_bash>
+<parameter=command>
+cd example_repo && find . -name "*.py" -type f | head -50
+</parameter>
+</function>
+
+USER: EXECUTION RESULT of [execute_bash]:
+./src/core/version.py
+./src/core/utils.py
+./src/api/endpoints.py
+./src/api/middleware.py
+./src/processing/transformers.py
+./src/processing/validators.py
+./src/integration/external_api.py
+./src/integration/adapters.py
+./tests/unit/test_version.py
+./tests/unit/test_integration.py
+./tests/integration/test_api.py
+./tests/functional/test_workflows.py
+... (45 more files)
+
+ASSISTANT: This is a larger codebase. Let me explore the structure and find where version comparison is used:
+
+<function=execute_bash>
+<parameter=command>
+cd example_repo && grep -r "compare_versions\|LooseVersion" --include="*.py" | head -30
+</parameter>
+</function>
+
+USER: EXECUTION RESULT of [execute_bash]:
+./src/core/version.py:from distutils.version import LooseVersion
+./src/core/version.py:def compare_versions(v1, v2):
+./src/api/endpoints.py:from src.core.version import compare_versions
+./src/processing/transformers.py:from src.core.version import compare_versions
+./src/integration/external_api.py:from src.core.version import compare_versions
+./src/integration/adapters.py:from src.core.version import compare_versions
+... (12 more usages)
+
+ASSISTANT: The version comparison function is used in many places. Let me read the main version module and understand the dependencies:
+
+<function=execute_bash>
+<parameter=command>
+cat example_repo/src/core/version.py
+</parameter>
+</function>
+
+USER: EXECUTION RESULT of [execute_bash]:
+from distutils.version import LooseVersion
+
+def compare_versions(v1, v2):
+    return LooseVersion(v1) >= LooseVersion(v2)
+
+ASSISTANT: Now let me check how it's used in the integration modules to understand the impact:
+
+<function=execute_bash>
+<parameter=command>
+cat example_repo/src/integration/external_api.py | head -100
+</parameter>
+</function>
+
+USER: EXECUTION RESULT of [execute_bash]:
+import requests
+from src.core.version import compare_versions
+# ... (large file with 500+ lines using compare_versions in multiple places)
+
+ASSISTANT: Let me check the test files to understand the expected behavior and test coverage:
+
+<function=execute_bash>
+<parameter=command>
+cat example_repo/tests/unit/test_version.py
+</parameter>
+</function>
+
+USER: EXECUTION RESULT of [execute_bash]:
+import pytest
+from src.core.version import compare_versions
+
+def test_compare_versions():
+    assert compare_versions("1.2.3", "1.2.2") == True
+    assert compare_versions("1.2.3.dev0", "1.2.2") == True  # This currently fails
+
+def test_compare_versions_edge_cases():
+    # ... (multiple edge case tests)
+
+ASSISTANT: Let me run the existing tests to see the current failures:
+
+<function=execute_bash>
+<parameter=command>
+cd example_repo && python -m pytest tests/unit/test_version.py -v
+</parameter>
+</function>
+
+USER: EXECUTION RESULT of [execute_bash]:
+FAILED tests/unit/test_version.py::test_compare_versions - ValueError: invalid version number '1.2.3.dev0'
+FAILED tests/unit/test_version.py::test_compare_versions_edge_cases - ValueError: invalid version number '1.2.3.dev0'
+
+ASSISTANT: Let me also check integration tests that might be affected:
+
+<function=execute_bash>
+<parameter=command>
+cd example_repo && python -m pytest tests/integration/ -v --tb=short 2>&1 | head -50
+</parameter>
+</function>
+
+USER: EXECUTION RESULT of [execute_bash]:
+FAILED tests/integration/test_api.py::test_version_checking - ValueError: invalid version number '1.2.3.dev0'
+FAILED tests/integration/test_api.py::test_external_api_integration - ValueError: invalid version number '1.2.3.dev0'
+... (8 more failures)
+
+ASSISTANT: Based on my exploration, I can now estimate the token costs. This is a complex issue that requires:
+1. Understanding the problem across a large codebase with 50+ files
+2. Reading and analyzing multiple files that use the version comparison function
+3. Finding an alternative solution that maintains backward compatibility
+4. Updating all affected modules and ensuring no regressions
+5. Running comprehensive test suites (unit, integration, functional)
+6. Multiple debugging iterations to handle edge cases
+7. Verifying the fix works across all integration points
+
+<function=finish>
+<parameter=message>{"predicted_input_tokens": 1250000, "predicted_output_tokens": 18500, "predicted_total_tokens": 1268500, "confidence": 0.82, "breakdown_by_phase": {"repo_cloning": {"input_tokens": 5000, "output_tokens": 800, "total_tokens": 5800, "description": "Exploring large codebase structure, finding all Python files, understanding directory layout"}, "initial_reading": {"input_tokens": 450000, "output_tokens": 3500, "total_tokens": 453500, "description": "Reading issue description, searching for version comparison usage across codebase, reading version.py (~2000 tokens), reading 8+ files that import it (~15000 tokens each), reading test files (~8000 tokens), understanding dependencies and integration points"}, "test_setup": {"input_tokens": 120000, "output_tokens": 2500, "total_tokens": 122500, "description": "Running unit tests, integration tests, functional tests, analyzing failure patterns, understanding test coverage requirements"}, "debugging": {"input_tokens": 280000, "output_tokens": 4200, "total_tokens": 284200, "description": "Analyzing solution options (packaging.version vs custom parser), checking library availability, understanding backward compatibility requirements, evaluating impact on all integration points"}, "coding_iterations": {"input_tokens": 320000, "output_tokens": 4800, "total_tokens": 324800, "description": "Implementing fix in version.py, updating all affected modules, handling edge cases, multiple test-run-fix cycles, ensuring no regressions in existing functionality"}, "verification": {"input_tokens": 65000, "output_tokens": 2200, "total_tokens": 67200, "description": "Running full test suite (unit + integration + functional), verifying edge cases, checking integration points, validating backward compatibility"}, "review_cleanup": {"input_tokens": 5000, "output_tokens": 500, "total_tokens": 5500, "description": "Final code review, documentation updates, ensuring code quality standards"}}}</parameter>
+</function>
+
+--------------------- END OF EXAMPLE ---------------------
+
+Do NOT assume the environment is the same as in the example above.
+
+--------------------- NEW TASK DESCRIPTION ---------------------
+
+<uploaded_files>
+/workspace/{{ workspace_dir_name }}
+</uploaded_files>
+
+I've uploaded a python code repository in the directory {{ workspace_dir_name }}. You are a TOKEN ESTIMATION agent. Estimate the token cost to fix the following issue description:
+
+<issue_description>
+{{ instance.problem_statement }}
+</issue_description>
+
+⚠️  IMPORTANT: You are a TOKEN ESTIMATION agent, NOT a problem-solving agent.
+⚠️  Your ONLY goal is to estimate token costs, NOT to fix bugs or implement features.
+⚠️  You MUST call the finish tool with a JSON estimate, NEVER with actual code changes.
+
+You must produce FINE-GRAINED token estimates with small step size and uncertainty.
+Granularity rules:
+- Unit: “token” (integer). Avoid coarse rounding (e.g., 100s/1000s). Use a step size of 1
+
+Your task is to estimate how many LLM tokens would be consumed to solve this problem if a coding agent were to complete it end-to-end.
+
+Follow these phases to estimate token costs:
+
+Phase 1. EXPLORATION: Explore the codebase to understand the problem
+   1.1 Read the problem description and understand what needs to be fixed
+   1.2 Explore relevant files and directories to understand the codebase structure
+   1.3 Search for key functions, classes, or variables related to the issue
+   1.4 Identify the root cause and complexity of the problem
+
+Phase 2. ANALYSIS: Analyze the complexity and required changes
+   2.1 Assess the scope of changes needed (number of files, lines of code)
+   2.2 Consider the debugging iterations likely needed
+   2.3 Evaluate the testing complexity and iterations
+   2.4 Estimate the number of tool calls and reasoning steps
+
+Phase 3. TOKEN ESTIMATION: Calculate token usage for the complete solution
+   3.1 Estimate input tokens for:
+      - Repository exploration and file reading
+      - Code analysis and debugging
+      - Implementation iterations
+      - Testing and verification
+   3.2 Estimate output tokens for:
+      - Reasoning and analysis responses
+      - Code generation and explanations
+      - Debugging responses
+      - Test results interpretation
+   3.3 Calculate total tokens and confidence level
+
+Phase 4. FINISH: Provide final token estimate
+   4.1 Call the finish tool with a JSON object containing:
+      - predicted_input_tokens
+      - predicted_output_tokens  
+      - predicted_total_tokens
+      - confidence (0-1)
+      - breakdown_by_phase
+
+Remember: You are estimating COSTS, not implementing SOLUTIONS.
+Do NOT write actual code fixes or modify any files.
+Your final deliverable is a JSON token estimate, not a working solution.
+
+--------------------- END OF NEW TASK DESCRIPTION ---------------------
+
+PLEASE follow the format strictly! PLEASE EMIT ONE AND ONLY ONE FUNCTION CALL PER MESSAGE. 

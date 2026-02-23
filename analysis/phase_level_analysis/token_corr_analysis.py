@@ -20,16 +20,16 @@ warnings.filterwarnings('ignore')
 # --------------------------------------------------------------------
 # CONFIG
 # --------------------------------------------------------------------
-BASE = Path("./sonet_openhands")
+BASE = Path("")
 RUN_IDS = range(1, 5)  # runs 1 … 4
 
 RUN_DIR_TMPL = (
-    "claude-3-7-sonnet-20250219_maxiter_100_N_v0.31.0-no-hint-juan-inst-t1-run_{i}"
+    ""
 )
 EXTRACT_DIR_TMPL = RUN_DIR_TMPL + "_all_interaction_extract"
 
 # Token types to analyze
-TOKEN_TYPES = ['prompt_tokens', 'completion_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens']
+TOKEN_TYPES = ['completion_tokens', 'cache_creation_input_tokens', 'prompt_tokens_noncached', 'cache_read_input_tokens']
 
 # Phase names
 PHASES = ['early', 'early_mid', 'mid', 'later_mid', 'later']
@@ -85,6 +85,15 @@ def calculate_correlation(data, x_col, y_col):
         return corr, p_val
     except:
         return np.nan, np.nan
+
+def get_token_type_label(token_type):
+    """
+    Get display label for token type.
+    """
+    if token_type == 'prompt_tokens_noncached':
+        return 'Prompt Tokens (non-cached)'
+    else:
+        return token_type.replace('_', ' ').title()
 
 def load_all_data():
     """
@@ -158,6 +167,9 @@ def create_correlation_dataframe(all_data):
                                 
                                 if phase_rounds:
                                     df = pd.DataFrame(phase_rounds)
+                                    # Handle prompt_tokens_noncached as prompt_tokens - cache_read_input_tokens
+                                    if token_type == 'prompt_tokens_noncached':
+                                        df['prompt_tokens_noncached'] = df['prompt_tokens'] - df['cache_read_input_tokens']
                                     corr, _ = calculate_correlation(df, token_type, 'cost')
                                     if not np.isnan(corr):
                                         correlations.append(corr)
@@ -171,6 +183,9 @@ def create_correlation_dataframe(all_data):
                             
                             if phase_rounds:
                                 df = pd.DataFrame(phase_rounds)
+                                # Handle prompt_tokens_noncached as prompt_tokens - cache_read_input_tokens
+                                if token_type == 'prompt_tokens_noncached':
+                                    df['prompt_tokens_noncached'] = df['prompt_tokens'] - df['cache_read_input_tokens']
                                 corr, _ = calculate_correlation(df, token_type, 'cost')
                                 row[col_name] = corr
                             else:
@@ -206,14 +221,14 @@ def create_visualization(df, output_path="cache_correlation_plot.png"):
     plot_df = pd.DataFrame(plot_data)
     
     # Create the plot
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(10, 8))
     
     # Set up the plot
     x_pos = np.arange(len(PHASES))
     width = 0.2  # Width of bars
     
     # Colors for different token types
-    colors = ['#ACC2D9', '#8B7D9A', '#779ECB', '#464196']
+    colors = ['#8B7D9A', '#779ECB', '#ACC2D9', '#2D4A6E']
     
     for i, token_type in enumerate(TOKEN_TYPES):
         phase_data = plot_df[plot_df['token_type'] == token_type]
@@ -221,36 +236,41 @@ def create_visualization(df, output_path="cache_correlation_plot.png"):
         phase_stds = phase_data['std'].values
         
         plt.bar(x_pos + i * width, phase_corrs, width, 
-                label=token_type.replace('_', ' ').title(), 
+                label=get_token_type_label(token_type), 
                 color=colors[i], alpha=0.8, linewidth=0.5)
     
     # Customize the plot
-    plt.xlabel('Problem-Solving Phase', fontsize=16)
-    plt.ylabel('Correlation with Cost', fontsize=16)
+    plt.xlabel('Problem-Solving Phase', fontsize=30)
+    plt.ylabel('Correlation with Total Cost', fontsize=30)
     # plt.title('Token Type Correlations with Cost Across Problem-Solving Phases', fontsize=18)
-    plt.xticks(x_pos + width * 1.5, [p.replace('_', '-').title() for p in PHASES], fontsize=14)
-    plt.yticks(fontsize=14)
-    plt.legend(loc='upper right', fontsize=12)
+    plt.xticks(x_pos + width * 1.5, [p.replace('_', '-').title() for p in PHASES], fontsize=28)
+    plt.yticks(fontsize=28)
+    # Force legend order to match plotting order
+    handles, labels = plt.gca().get_legend_handles_labels()
+    label_order = [get_token_type_label(token_type) for token_type in TOKEN_TYPES]
+
+    ordered = [next(h for h, l in zip(handles, labels) if l == name) for name in label_order]
+    plt.legend(ordered, label_order, loc='upper right', fontsize=17)
     plt.grid(True, alpha=0.3, axis='y')
     
     # Add value labels on bars
-    for i, phase in enumerate(PHASES):
-        for j, token_type in enumerate(TOKEN_TYPES):
-            value = plot_df[(plot_df['phase'] == phase) & 
-                           (plot_df['token_type'] == token_type)]['correlation'].iloc[0]
-            std_val = plot_df[(plot_df['phase'] == phase) & 
-                             (plot_df['token_type'] == token_type)]['std'].iloc[0]
-            if not np.isnan(value):
-                # Position text above bar for positive values, below for negative values
-                if value >= 0:
-                    y_pos = value + 0.01
-                    va_align = 'bottom'
-                else:
-                    y_pos = value - 0.01
-                    va_align = 'top'
+    # for i, phase in enumerate(PHASES):
+    #     for j, token_type in enumerate(TOKEN_TYPES):
+    #         value = plot_df[(plot_df['phase'] == phase) & 
+    #                        (plot_df['token_type'] == token_type)]['correlation'].iloc[0]
+    #         std_val = plot_df[(plot_df['phase'] == phase) & 
+    #                          (plot_df['token_type'] == token_type)]['std'].iloc[0]
+    #         if not np.isnan(value):
+    #             # Position text above bar for positive values, below for negative values
+    #             if value >= 0:
+    #                 y_pos = value + 0.01
+    #                 va_align = 'bottom'
+    #             else:
+    #                 y_pos = value - 0.01
+    #                 va_align = 'top'
                 
-                plt.text(i + j * width, y_pos, f'{value:.3f}', 
-                        ha='center', va=va_align, fontsize=10)
+    #             plt.text(i + j * width, y_pos, f'{value:.3f}', 
+    #                     ha='center', va=va_align, fontsize=10)
     
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -258,19 +278,115 @@ def create_visualization(df, output_path="cache_correlation_plot.png"):
     
     print(f"Plot saved as {output_path}")
 
+def calculate_missing_noncached_columns(df, all_data):
+    """
+    Calculate missing prompt_tokens_noncached correlation columns from raw data.
+    Adds the columns to the dataframe in place.
+    """
+    print("Calculating missing prompt_tokens_noncached columns from raw data...")
+    
+    # Check which columns are missing
+    missing_cols = []
+    for phase in PHASES:
+        for run_id in list(RUN_IDS) + ['avg']:
+            col_name = f"corr_prompt_tokens_noncached_cost_{phase}_{run_id}"
+            if col_name not in df.columns:
+                missing_cols.append((phase, run_id))
+    
+    if not missing_cols:
+        print("All prompt_tokens_noncached columns already exist.")
+        return df
+    
+    print(f"Found {len(missing_cols)} missing columns. Calculating from raw data...")
+    
+    # Process each instance
+    for idx, row in df.iterrows():
+        instance_id = row['instance_id']
+        
+        if instance_id not in all_data:
+            print(f"  Warning: Instance {instance_id} not found in raw data. Skipping.")
+            continue
+        
+        runs_data = all_data[instance_id]
+        
+        # Calculate correlations for missing columns
+        for phase, run_id in missing_cols:
+            col_name = f"corr_prompt_tokens_noncached_cost_{phase}_{run_id}"
+            
+            if run_id == 'avg':
+                # Calculate average correlation across all runs
+                correlations = []
+                for r_id in RUN_IDS:
+                    if r_id in runs_data:
+                        phases_data = divide_into_phases(runs_data[r_id])
+                        phase_rounds = phases_data[phase]
+                        
+                        if phase_rounds:
+                            df_phase = pd.DataFrame(phase_rounds)
+                            # Calculate prompt_tokens - cache_read_input_tokens
+                            df_phase['prompt_tokens_noncached'] = df_phase['prompt_tokens'] - df_phase['cache_read_input_tokens']
+                            corr, _ = calculate_correlation(df_phase, 'prompt_tokens_noncached', 'cost')
+                            if not np.isnan(corr):
+                                correlations.append(corr)
+                
+                df.at[idx, col_name] = np.mean(correlations) if correlations else np.nan
+            else:
+                # Individual run correlation
+                if run_id in runs_data:
+                    phases_data = divide_into_phases(runs_data[run_id])
+                    phase_rounds = phases_data[phase]
+                    
+                    if phase_rounds:
+                        df_phase = pd.DataFrame(phase_rounds)
+                        # Calculate prompt_tokens - cache_read_input_tokens
+                        df_phase['prompt_tokens_noncached'] = df_phase['prompt_tokens'] - df_phase['cache_read_input_tokens']
+                        corr, _ = calculate_correlation(df_phase, 'prompt_tokens_noncached', 'cost')
+                        df.at[idx, col_name] = corr
+                    else:
+                        df.at[idx, col_name] = np.nan
+                else:
+                    df.at[idx, col_name] = np.nan
+    
+    print("Finished calculating missing columns.")
+    return df
+
 def load_existing_csv(csv_path="cache_correlation_analysis.csv"):
     """
     Load existing CSV file with correlation data.
+    If prompt_tokens_noncached columns are missing, calculate them from raw data.
     """
     try:
         df = pd.read_csv(csv_path)
         print(f"Loaded existing CSV with shape: {df.shape}")
+        
+        # Check if prompt_tokens_noncached columns are missing
+        sample_col = f"corr_prompt_tokens_noncached_cost_{PHASES[0]}_avg"
+        if sample_col not in df.columns:
+            print("\n" + "="*70)
+            print("CSV file is missing prompt_tokens_noncached columns.")
+            print("Loading raw data to calculate missing correlations...")
+            print("="*70 + "\n")
+            
+            # Load raw data
+            all_data = load_all_data()
+            if not all_data:
+                print("Error: Could not load raw data. Cannot calculate missing columns.")
+                return None
+            
+            # Calculate missing columns
+            df = calculate_missing_noncached_columns(df, all_data)
+            
+            # Save updated CSV
+            print(f"\nSaving updated CSV with new columns to {csv_path}...")
+            df.to_csv(csv_path, index=False)
+            print("CSV updated successfully.")
+        
         return df
     except FileNotFoundError:
         print(f"CSV file {csv_path} not found. Please run the full analysis first.")
         return None
 
-def create_visualization_only(csv_path="cache_correlation_analysis.csv", output_path="cache_correlation_plot.png"):
+def create_visualization_only(csv_path="cache_correlation_analysis.csv", output_path="cache_correlation_plot_new.png"):
     """
     Load existing CSV and create visualization with error bars.
     """
@@ -293,7 +409,7 @@ def create_visualization_only(csv_path="cache_correlation_analysis.csv", output_
             col_name = f"corr_{token_type}_cost_{phase}_avg"
             mean_corr = df[col_name].mean()
             std_corr = df[col_name].std()
-            print(f"  {token_type.replace('_', ' ').title()}: {mean_corr:.3f} ± {std_corr:.3f}")
+            print(f"  {get_token_type_label(token_type)}: {mean_corr:.3f} ± {std_corr:.3f}")
     
     print("\nVisualization complete!")
 
@@ -332,7 +448,7 @@ def main():
             col_name = f"corr_{token_type}_cost_{phase}_avg"
             mean_corr = df[col_name].mean()
             std_corr = df[col_name].std()
-            print(f"  {token_type.replace('_', ' ').title()}: {mean_corr:.3f} ± {std_corr:.3f}")
+            print(f"  {get_token_type_label(token_type)}: {mean_corr:.3f} ± {std_corr:.3f}")
     
     print("\nAnalysis complete!")
 

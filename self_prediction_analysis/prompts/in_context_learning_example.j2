@@ -1,0 +1,71 @@
+Here's a running example of how to perform TOKEN ESTIMATION with the provided tools.
+
+USER: I've uploaded a python code repository in the directory example_repo. You are a TOKEN ESTIMATION agent. Estimate the token cost to fix the following issue description:
+
+<issue_description>
+Fix a bug where the version comparison function fails for development versions (e.g., "1.2.3.dev0").
+</issue_description>
+
+ASSISTANT: I'll explore the codebase to understand the problem and estimate token costs.
+
+<function=execute_bash>
+<parameter=command>
+cd example_repo && find . -name "*.py" -type f | head -20
+</parameter>
+</function>
+
+USER: EXECUTION RESULT of [execute_bash]:
+./src/utils.py
+./src/version.py
+./tests/test_version.py
+
+ASSISTANT: Let me read the relevant files to understand the issue:
+
+<function=execute_bash>
+<parameter=command>
+cat example_repo/src/version.py
+</parameter>
+</function>
+
+USER: EXECUTION RESULT of [execute_bash]:
+from distutils.version import LooseVersion
+
+def compare_versions(v1, v2):
+    return LooseVersion(v1) >= LooseVersion(v2)
+
+ASSISTANT: Now let me check the test file to understand the expected behavior:
+
+<function=execute_bash>
+<parameter=command>
+cat example_repo/tests/test_version.py
+</parameter>
+</function>
+
+USER: EXECUTION RESULT of [execute_bash]:
+import pytest
+from src.version import compare_versions
+
+def test_compare_versions():
+    assert compare_versions("1.2.3", "1.2.2") == True
+    assert compare_versions("1.2.3.dev0", "1.2.2") == True  # This currently fails
+
+ASSISTANT: Let me run the existing tests to see the current failures:
+
+<function=execute_bash>
+<parameter=command>
+cd example_repo && python -m pytest tests/test_version.py -v
+</parameter>
+</function>
+
+USER: EXECUTION RESULT of [execute_bash]:
+FAILED tests/test_version.py::test_compare_versions - ValueError: invalid version number '1.2.3.dev0'
+
+ASSISTANT: Based on my exploration, I can now estimate the token costs. The issue requires:
+1. Understanding the problem (LooseVersion doesn't handle dev versions)
+2. Finding an alternative solution (e.g., using packaging.version)
+3. Implementing and testing the fix
+4. Verifying with edge cases
+
+<function=finish>
+<parameter=message>{"predicted_input_tokens": 4500, "predicted_output_tokens": 3200, "predicted_total_tokens": 7700, "confidence": 0.85, "breakdown_by_phase": {"repo_cloning": {"input_tokens": 50, "output_tokens": 30, "total_tokens": 80, "description": "Basic directory exploration"}, "initial_reading": {"input_tokens": 2800, "output_tokens": 1200, "total_tokens": 4000, "description": "Reading issue, finding version.py (~800 tokens), test file (~400 tokens), understanding LooseVersion limitations"}, "test_setup": {"input_tokens": 300, "output_tokens": 500, "total_tokens": 800, "description": "Running existing tests to see failures"}, "debugging": {"input_tokens": 400, "output_tokens": 600, "total_tokens": 1000, "description": "Analyzing solution options, checking packaging library availability"}, "coding_iterations": {"input_tokens": 600, "output_tokens": 500, "total_tokens": 1100, "description": "Implementing fix with try/except wrapper, testing changes"}, "verification": {"input_tokens": 250, "output_tokens": 300, "total_tokens": 550, "description": "Running test suite, verifying edge cases"}, "review_cleanup": {"input_tokens": 100, "output_tokens": 70, "total_tokens": 170, "description": "Final review and validation"}}}</parameter>
+</function>
